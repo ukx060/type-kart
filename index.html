@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Type Kart</title>
+<style>
+  /* Layout: single framed console, two side-by-side lanes that stack on phones. Deliberately dark-only arcade look. */
+  :root{
+    --bg: #120e0d;
+    --panel: #1d1613;
+    --gold: #f7c75a;
+    --gold-2: #ff9a2d;
+    --ink: #fff5dc;
+    --cream: #ffeab0;
+    --teal: #5fe0d2;
+    --red: #dc584c;
+    --shadow: rgba(0,0,0,0.42);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; min-height: 100%; }
+
+  body {
+    background:
+      radial-gradient(circle at top, rgba(255,168,58,0.18), transparent 30%),
+      linear-gradient(180deg, #120d0b 0%, #1b1411 100%);
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-inline: 16px;
+    padding-block: 18px;
+    min-height: 100vh;
+  }
+
+  .app {
+    width: min(1200px, 100%);
+    background: rgba(31, 22, 18, 0.93);
+    border: 5px solid var(--gold);
+    border-radius: 24px;
+    box-shadow: 0 28px 42px var(--shadow);
+    padding: 16px;
+  }
+
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8);
+    display: none; align-items: center; justify-content: center;
+    z-index: 1000; padding: 20px;
+  }
+  .modal.active { display: flex; }
+
+  .modal-box {
+    background: rgba(31, 22, 18, 0.96);
+    border: 4px solid var(--gold);
+    border-radius: 20px;
+    padding: 26px 22px;
+    width: min(500px, 100%);
+    text-align: center;
+    box-shadow: 0 28px 42px var(--shadow);
+  }
+  .modal-box h2 {
+    margin: 0 0 16px;
+    font-size: clamp(1.4rem, 2vw, 2.2rem);
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold);
+  }
+  .modal-box label {
+    display: block; text-align: left; margin-bottom: 8px;
+    font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--cream); font-size: 0.8rem;
+  }
+  .modal-box input {
+    width: 100%; padding: 12px 14px; border-radius: 12px;
+    border: 3px solid rgba(247,199,90,0.76);
+    background: #160f0d; color: var(--ink);
+    font-size: 1.1rem; font-weight: 800; outline: none; margin-bottom: 12px;
+  }
+  .modal-box input:focus { border-color: var(--teal); box-shadow: 0 0 0 4px rgba(95,224,210,0.18); }
+  .modal-hint { margin: 0 0 14px; text-align: left; color: #fbe9b9; font-size: 0.9rem; line-height: 1.45; }
+  .modal-buttons { display: flex; gap: 12px; margin-top: 8px; }
+  .modal-buttons button { flex: 1; }
+
+  .topbar { text-align: center; margin-bottom: 10px; }
+  h1 {
+    margin: 0;
+    font-size: clamp(2.2rem, 5vw, 5rem);
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--gold); text-shadow: 4px 4px 0 #492e00;
+    text-wrap: balance;
+  }
+  .subtitle {
+    margin-top: 8px;
+    font-size: clamp(0.7rem, 1vw, 0.95rem);
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: #fbe9b9; font-weight: 900;
+  }
+
+  .header-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .level-display, .user-info {
+    background: rgba(0,0,0,0.22);
+    border: 2px solid rgba(247,199,90,0.72);
+    border-radius: 10px; padding: 8px 12px;
+    color: var(--cream); font-weight: 900;
+    letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.85rem;
+  }
+  .leaderboard-btn {
+    background: rgba(255,154,45,0.2);
+    border: 2px solid rgba(255,154,45,0.7);
+    border-radius: 10px; padding: 8px 12px;
+    color: #ffd787; font-weight: 900; box-shadow: none;
+    letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.85rem;
+  }
+
+  .leaderboard-panel {
+    margin: 0 auto 14px; max-width: 820px;
+    background: rgba(0,0,0,0.18);
+    border: 2px solid rgba(247,199,90,0.7);
+    border-radius: 14px; padding: 12px 14px;
+  }
+  .leaderboard-title {
+    text-align: center; font-weight: 900; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--gold); margin-bottom: 10px;
+  }
+  .leaderboard-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .leaderboard-list li {
+    display: grid; grid-template-columns: 32px minmax(0,1fr) auto auto;
+    gap: 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(247,199,90,0.28);
+    border-radius: 10px; padding: 8px 10px;
+    font-weight: 800; align-items: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .leaderboard-list li span:nth-child(2) { overflow-wrap: anywhere; }
+
+  .status {
+    margin: 8px auto 14px; max-width: 780px; min-height: 54px;
+    padding: 10px 14px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    background: rgba(0,0,0,0.22);
+    border: 2px solid rgba(247,199,90,0.72);
+    color: var(--cream);
+    letter-spacing: 0.12em;
+    font-size: clamp(0.65rem, 1vw, 0.9rem);
+    text-transform: uppercase; font-weight: 900; line-height: 1.4;
+  }
+
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+  .lane {
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.12));
+    border: 4px solid rgba(247,199,90,0.82);
+    border-radius: 18px; padding: 12px;
+    position: relative; overflow: hidden; min-width: 0;
+  }
+
+  .player-top {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; margin-bottom: 10px; min-height: 42px;
+  }
+  .player-name {
+    font-size: clamp(1.2rem, 2vw, 2rem); font-weight: 900;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink);
+    min-width: 0; overflow-wrap: anywhere;
+  }
+  .score {
+    background: rgba(0,0,0,0.22);
+    border: 2px solid rgba(247,199,90,0.72);
+    border-radius: 999px; padding: 8px 12px;
+    font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--gold); font-weight: 900; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Track: real road strip with a moving kart */
+  .track {
+    position: relative;
+    height: 74px;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.18) 0 14px, transparent 14px 28px) center / 100% 3px no-repeat,
+      rgba(18, 42, 35, 0.9);
+    border: 3px solid rgba(95,224,210,0.9);
+    border-radius: 14px;
+    margin-bottom: 12px;
+    box-shadow: inset 0 0 18px rgba(0,0,0,0.24);
+    overflow: hidden;
+  }
+  .track .flag {
+    position: absolute; top: 0; bottom: 0; width: 12px;
+    background: repeating-conic-gradient(#fff5dc 0 25%, #120e0d 0 50%) 0 0 / 12px 12px;
+  }
+  .track .flag.start { left: 26px; opacity: 0.35; }
+  .track .flag.finish { right: 10px; }
+  .kart {
+    position: absolute; top: 50%; left: 8px;
+    transform: translate(0, -50%);
+    width: 54px; height: 32px; border-radius: 10px 14px 8px 8px;
+    display: grid; place-items: center;
+    font: 900 0.85rem/1 "Consolas", "Courier New", monospace;
+    color: #2a1701;
+    background: linear-gradient(180deg, #ffb13f, #f17a17);
+    box-shadow: 0 6px 0 #4a2a07, 0 10px 14px rgba(0,0,0,0.4);
+    transition: left 0.25s ease-out;
+  }
+  .kart.rival { background: linear-gradient(180deg, #8ef0e6, #3fb7aa); color: #062320; box-shadow: 0 6px 0 #0d3f3a, 0 10px 14px rgba(0,0,0,0.4); }
+  .kart.spin { animation: spin 0.7s ease-in-out; }
+  @keyframes spin { from { rotate: 0deg; } to { rotate: 360deg; } }
+
+  .stats {
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    margin: 12px 0; padding: 8px 10px; border-radius: 10px;
+    background: rgba(0,0,0,0.18); color: #fceac0;
+    font-size: 0.95rem; font-weight: 800; letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stats strong.banana { color: var(--red); }
+
+  .target {
+    min-height: 58px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    padding: 10px 12px; border-radius: 12px;
+    background: rgba(255,154,45,0.12);
+    border: 2px solid rgba(255,154,45,0.7);
+    color: #ffd787;
+    font-size: clamp(1rem, 1.7vw, 1.35rem);
+    font-weight: 900; letter-spacing: 0.04em; margin-bottom: 12px;
+    overflow-wrap: anywhere;
+  }
+  .target .word { color: var(--ink); background: rgba(0,0,0,0.25); padding: 2px 8px; border-radius: 6px; }
+
+  .word-box {
+    width: 100%; min-height: 90px; resize: none;
+    border: 4px solid rgba(247,199,90,0.76);
+    border-radius: 14px; background: #160f0d; color: var(--ink);
+    padding: 12px 14px;
+    font: 900 clamp(1.2rem, 2vw, 1.8rem)/1.4 "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    outline: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .word-box:focus { border-color: var(--teal); box-shadow: 0 0 0 4px rgba(95,224,210,0.18); }
+  .word-box:disabled { opacity: 0.7; }
+  .word-box.cpu { color: #bff7ef; }
+
+  .controls { margin-top: 16px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+
+  button {
+    appearance: none; border: 0; border-radius: 12px;
+    padding: 14px 20px; font-weight: 900; letter-spacing: 0.12em;
+    text-transform: uppercase; cursor: pointer; font-family: inherit;
+    transition: transform 0.08s ease, filter 0.15s ease;
+    box-shadow: 0 10px 18px rgba(0,0,0,0.25);
+  }
+  button:hover { filter: brightness(1.06); }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: 0.55; cursor: default; }
+  button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+
+  .primary { background: linear-gradient(180deg, #ffb13f, #f17a17); color: #2a1701; }
+  .secondary { background: linear-gradient(180deg, #f2e9c7, #d3b264); color: #291d08; }
+
+  @media (max-width: 820px) {
+    .lanes { grid-template-columns: 1fr; }
+    .app { padding: 12px; border-width: 4px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .kart { transition: none; }
+    .kart.spin { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="nameModal" class="modal active">
+  <div class="modal-box">
+    <h2>Type Kart</h2>
+    <p class="modal-hint">Type each word and press Space. First to 20m wins. A typo costs you 1m and a short spin-out. The CPU rival gets faster every level.</p>
+    <label for="playerNameInput">Driver name</label>
+    <input id="playerNameInput" type="text" maxlength="20" autocomplete="off" placeholder="Enter your name" />
+    <div class="modal-buttons">
+      <button id="saveNameBtn" class="primary">Start</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="topbar">
+    <h1>Type Kart</h1>
+    <div class="subtitle">Every correct word is gas. Every typo is a banana skin.</div>
+  </div>
+
+  <div class="header-bar">
+    <div id="levelDisplay" class="level-display">Level 1 / 10</div>
+    <div id="userInfo" class="user-info">Driver: Guest</div>
+    <button id="toggleLeaderboard" class="leaderboard-btn" aria-expanded="false">Leaderboard</button>
+  </div>
+
+  <div id="leaderboardPanel" class="leaderboard-panel" hidden>
+    <div class="leaderboard-title">Top drivers</div>
+    <ul id="leaderboardList" class="leaderboard-list"></ul>
+  </div>
+
+  <div id="status" class="status" role="status">Ready for launch. Press Start Race.</div>
+
+  <div class="lanes">
+    <div class="lane">
+      <div class="player-top">
+        <div class="player-name" id="playerName1">Player 1</div>
+        <div id="p1Score" class="score">0 / 20m</div>
+      </div>
+      <div id="track1" class="track"><span class="flag start"></span><span class="flag finish"></span><span class="kart">P1</span></div>
+      <div class="stats">
+        <span>Clean: <strong id="p1Clean">0</strong></span>
+        <span>Typos: <strong id="p1Typos">0</strong></span>
+        <span>State: <strong id="p1State">Ready</strong></span>
+      </div>
+      <div id="p1Target" class="target">Next word: —</div>
+      <textarea id="p1Input" class="word-box" placeholder="Press Start Race, then type the word and press space" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+    </div>
+
+    <div class="lane">
+      <div class="player-top">
+        <div class="player-name" id="playerName2">Rival (CPU)</div>
+        <div id="p2Score" class="score">0 / 20m</div>
+      </div>
+      <div id="track2" class="track"><span class="flag start"></span><span class="flag finish"></span><span class="kart rival">CPU</span></div>
+      <div class="stats">
+        <span>Clean: <strong id="p2Clean">0</strong></span>
+        <span>Typos: <strong id="p2Typos">0</strong></span>
+        <span>State: <strong id="p2State">Ready</strong></span>
+      </div>
+      <div id="p2Target" class="target">Next word: —</div>
+      <textarea id="p2Input" class="word-box cpu" placeholder="CPU types here" readonly tabindex="-1"></textarea>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="startRace" class="primary">Start Race</button>
+    <button id="resetRace" class="secondary">Reset</button>
+  </div>
+</div>
+
+<script>
+  const sentenceBank = [
+    ["The cat sleeps by the warm window.","I drink tea and eat toast at dawn.","The room is quiet and bright today.","We walk to the shop for milk.","My keys are on the table again.","The dog waits by the door.","I type with two hands and focus.","A good beer tastes cold and easy.","The train leaves on time today.","We laugh and start the workday."],
+    ["The team fixes the broken laptop before lunch.","I read the notes and write the plan down.","The coffee is strong and the room is loud.","We share a small joke during the meeting.","My phone buzzes with a message from home.","The project moves slower than expected today.","The manager smiles after the fix works.","We clean the desk and start fresh.","A quick walk helps me think clearly.","The pub gets busier close to dinner time."],
+    ["The office lights flicker while the deadline gets closer.","I compare the old draft with the new version.","Our best idea arrives after the second coffee.","Several people add notes to the same slide.","The kettle clicks and the room fills with steam.","The test passes after one quick fix.","We solve the glitch before anyone gets annoyed.","The group decides on a simple final layout.","The hallway smells like fresh rain and paper.","I finish my task before the end of break."],
+    ["The customer email arrives with a strange request and a rush deadline.","Our developer explains the bug in clear steps and calm words.","The meeting drags on while the tickets pile up.","I update the checklist and mark each blocker carefully.","We compare two different workflows before committing to one.","The designer sends a sharper mockup and it looks cleaner.","A quick test catches a hidden error in the payment flow.","The team agrees to ship the easy fix first.","The late bus makes everyone laugh and complain at once.","I keep the notes in order so the next handoff is easy."],
+    ["The product launch faces a small delay because the billing system still misreports taxes.","Our support team handles a flood of confused messages with remarkable patience.","The analyst points out the pattern behind the noisy user feedback.","The roadmap changes again, but the core promise stays intact.","I document the edge case before the sprint review starts.","A single missing comma causes the whole export script to fail.","The backend team solves the race condition without panic or blame.","The new test run reveals a weaker case in the sign up path.","We keep the release plan realistic even when optimism runs high.","The room fills with coffee, tabs, and last minute questions."],
+    ["The campaign launch looks polished, but the analytics dashboard still tells a confusing story.","The onboarding guide needs one more pass before the new hires start training.","We rewrite the payment copy because the earlier version sounded too formal and cold.","The metrics improve only after we remove the duplicate tracking event from the funnel.","The cross functional review turns into a useful debate about user trust and speed.","The support queue spikes after the announcement, so we update the response template immediately.","The frontend team ships a faster first screen while the backend team reduces the response time.","I add a stronger fallback for the rare edge case that keeps resurfacing in testing.","The release note reads more clearly once the product manager strips out the jargon.","The room feels tense until the deployment check completes without surprises."],
+    ["The analytics pipeline breaks at the exact moment the stakeholder dashboard updates in real time.","The legal review flags a risk in the wording, so the copy is rewritten before launch.","Our incident response plan works because the team documented the failure mode ahead of time.","The prototype performs well in the office, but the mobile device still drops frames under load.","I trace the issue to a stale cache key and remove the mismatch before the session ends.","The user interviews suggest the new feature needs cleaner guidance, not just more power.","The sprint board becomes calmer once the blockers are moved into a single clear queue.","We rework the automation because the duplicate event fires twice during each retry.","The release checklist catches a missing verification step, which saves everyone a headache.","The whole team leaves the room tired, but the release itself feels less fragile."],
+    ["The customer retention experiment fails because the new messaging confuses the metric with the message.","Our deployment strategy keeps failing under load, so we redesign the traffic split with more caution.","The event log reveals a delayed response in the checkout flow, which explains the sudden dropoff.","The legal team refuses the first draft because the wording sounds too absolute and not nuanced enough.","We restructure the support workflow around the actual issue clusters instead of the ticket queues.","The accessibility review catches an unreadable contrast ratio in the warning banner and the error state.","The product owner asks for sharper prioritisation because the roadmap keeps expanding without rhythm.","I isolate the flaky test by replaying the same sequence with a cleaner log and stricter assertions.","The team agrees that the cleanest fix is not the flashiest one, even if it takes longer.","The after party starts late because the demo runs long and the room refuses to leave."],
+    ["The migration plan looks sturdy until the database snapshot reveals a hidden constraint in the legacy schema.","The incident commander keeps the room focused while three teams chase different symptoms in parallel.","The customer success team flags a spike in support tickets that only appears after the new onboarding flow.","We restructure the API contract to reduce ambiguity, but the downstream service still needs a compatibility patch.","The feature was elegant in the prototype, but the real traffic reveals a latency spike on the first render.","The team reorganises the deployment window to avoid overlapping maintenance activity and peak usage hours.","The quarterly review demands a stronger explanation of the tradeoff between stability and experimentation.","The bug report turns out to be a mismatch between the cached state and the user identity token.","We remove the noisy retry loop after proving that it amplifies the failure instead of protecting the system.","The room finally quiets down once the monitoring alert resolves and the service returns to baseline."],
+    ["The release candidate survives the smoke tests, but the edge case still breaks under the real traffic pattern.","The product strategy depends on a subtle trust signal, so the team rewrites the messaging to be less clever and more honest.","The observability stack finally exposes the missing dependency chain behind the intermittent timeout spike.","The architecture review suggests a simpler data flow, even if that means dropping a half finished abstraction.","The customer lifecycle data shows a sharp difference between early adopters and the general user base.","We move the state boundary closer to the user action so the system responds cleanly under retries and restarts.","The support escalation exposes a mismatch between the docs and the real product behaviour, which needs a patch quickly.","The rollout pauses while the team confirms that the waiver logic and the billing rule still agree under edge cases.","The final retrospective becomes surprisingly useful because every team names one hidden dependency and one decision that delayed progress.","The room celebrates the launch, but the first real user feedback still reminds everyone that the job is only half done."]
+  ];
+
+  const FINISH = 20;
+  const FREEZE_MS = 700;
+  const STORE_KEY = "typekart_leaderboard";
+
+  const state = { userName: "Guest", level: 1, racing: false, over: false, playerWon: false, leaderboard: [] };
+
+  const $ = id => document.getElementById(id);
+  const statusEl = $("status"), levelEl = $("levelDisplay"), userInfoEl = $("userInfo");
+  const startBtn = $("startRace"), resetBtn = $("resetRace");
+  const lbPanel = $("leaderboardPanel"), lbList = $("leaderboardList"), lbBtn = $("toggleLeaderboard");
+  const nameModal = $("nameModal"), nameInput = $("playerNameInput"), saveNameBtn = $("saveNameBtn");
+
+  function mkPlayer(n, isCpu) {
+    return {
+      isCpu, name: isCpu ? "Rival" : "Player 1",
+      input: $("p" + n + "Input"), track: $("track" + n), kart: $("track" + n).querySelector(".kart"),
+      targetEl: $("p" + n + "Target"), cleanEl: $("p" + n + "Clean"), typoEl: $("p" + n + "Typos"),
+      scoreEl: $("p" + n + "Score"), stateEl: $("p" + n + "State"),
+      words: [], wordIndex: 0, distance: 0, clean: 0, typos: 0, frozenUntil: 0, used: []
+    };
+  }
+  const human = mkPlayer(1, false), cpu = mkPlayer(2, true);
+  const players = [human, cpu];
+
+  // ---------- storage (optional; game works without it) ----------
+  function loadLeaderboard() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed.filter(e => e && typeof e.name === "string") : [];
+    } catch (e) { return []; }
+  }
+  function saveLeaderboard() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state.leaderboard)); } catch (e) {}
+  }
+  function getOrCreateEntry(name) {
+    let entry = state.leaderboard.find(x => x.name.toLowerCase() === name.toLowerCase());
+    if (!entry) { entry = { name, wins: 0, bestLevel: 1, lastPlayed: null }; state.leaderboard.push(entry); }
+    return entry;
+  }
+  function renderLeaderboard() {
+    const sorted = [...state.leaderboard]
+      .sort((a, b) => (b.wins || 0) - (a.wins || 0) || (b.bestLevel || 1) - (a.bestLevel || 1))
+      .slice(0, 8);
+    lbList.replaceChildren();
+    const rows = sorted.length ? sorted.map((e, i) => [i + 1, e.name, "Wins: " + (e.wins || 0), "Lvl " + (e.bestLevel || 1)])
+                               : [["–", "No drivers yet", "–", "–"]];
+    rows.forEach(cols => {
+      const li = document.createElement("li");
+      cols.forEach(c => { const s = document.createElement("span"); s.textContent = c; li.appendChild(s); });
+      lbList.appendChild(li);
+    });
+  }
+  function recordWin() {
+    const entry = getOrCreateEntry(state.userName);
+    entry.wins = (entry.wins || 0) + 1;
+    entry.bestLevel = Math.max(entry.bestLevel || 1, state.level);
+    entry.lastPlayed = new Date().toISOString();
+    saveLeaderboard(); renderLeaderboard();
+  }
+
+  // ---------- words ----------
+  function nextSentence(p) {
+    const list = sentenceBank[state.level - 1];
+    if (p.used.length >= list.length) p.used = [];
+    let i;
+    do { i = Math.floor(Math.random() * list.length); } while (p.used.includes(i));
+    p.used.push(i);
+    p.words = list[i].toLowerCase().split(/\s+/).filter(Boolean);
+    p.wordIndex = 0;
+  }
+
+  // ---------- UI ----------
+  function updatePlayerUI(p) {
+    const pct = Math.min(p.distance, FINISH) / FINISH;
+    p.kart.style.left = "calc(8px + (100% - 80px) * " + pct.toFixed(3) + ")";
+    p.cleanEl.textContent = p.clean;
+    p.typoEl.textContent = p.typos;
+    p.scoreEl.textContent = p.distance + " / " + FINISH + "m";
+
+    const frozen = Date.now() < p.frozenUntil;
+    let st = "Ready";
+    if (state.over) st = p.distance >= FINISH ? "Winner" : "Lost";
+    else if (frozen) st = "Banana!";
+    else if (state.racing) st = "Driving";
+    p.stateEl.textContent = st;
+    p.stateEl.classList.toggle("banana", frozen && !state.over);
+
+    p.targetEl.replaceChildren("Next word: ");
+    const w = document.createElement("span");
+    w.className = "word";
+    w.textContent = state.over ? "—" : (p.words[p.wordIndex] || "—");
+    p.targetEl.appendChild(w);
+  }
+  function refreshAll() { players.forEach(updatePlayerUI); }
+
+  function spin(p) {
+    p.kart.classList.remove("spin");
+    void p.kart.offsetWidth;
+    p.kart.classList.add("spin");
+  }
+
+  // ---------- race flow ----------
+  let cpuTimer = null;
+  let tickTimer = null;
+
+  function resetPlayer(p) {
+    p.used = [];
+    nextSentence(p);
+    p.distance = 0; p.clean = 0; p.typos = 0; p.frozenUntil = 0;
+    p.input.value = "";
+    p.kart.classList.remove("spin");
+  }
+
+  function stopTimers() {
+    clearTimeout(cpuTimer); cpuTimer = null;
+    clearInterval(tickTimer); tickTimer = null;
+  }
+
+  function setLevel(level) {
+    stopTimers();
+    state.level = Math.max(1, Math.min(level, sentenceBank.length));
+    state.racing = false; state.over = false; state.playerWon = false;
+    levelEl.textContent = "Level " + state.level + " / " + sentenceBank.length;
+    players.forEach(resetPlayer);
+    human.input.disabled = true;
+    statusEl.textContent = "Level " + state.level + " ready. Press Start Race.";
+    startBtn.disabled = false;
+    startBtn.textContent = "Start Race";
+    refreshAll();
+  }
+
+  function startRace() {
+    if (state.over) {
+      setLevel(state.playerWon ? (state.level < sentenceBank.length ? state.level + 1 : 1) : state.level);
+      return;
+    }
+    if (state.racing) return;
+    state.racing = true;
+    human.input.disabled = false;
+    human.input.value = "";
+    human.input.focus();
+    startBtn.disabled = true;
+    startBtn.textContent = "Race Live";
+    statusEl.textContent = "Race on! Every correct word is gas. Every typo is a banana skin.";
+    tickTimer = setInterval(refreshAll, 150);
+    scheduleCpu();
+    refreshAll();
+  }
+
+  function submitWord(p, typed) {
+    if (!state.racing || state.over) return;
+    if (Date.now() < p.frozenUntil) return;
+    const target = p.words[p.wordIndex];
+    if (!typed || !target) return;
+
+    const who = p.isCpu ? "Rival" : state.userName;
+    if (typed.toLowerCase() === target) {
+      p.clean += 1; p.distance += 1; p.wordIndex += 1;
+      if (p.wordIndex >= p.words.length) nextSentence(p);
+      if (!p.isCpu) statusEl.textContent = who + " nailed it. Full throttle.";
+    } else {
+      p.typos += 1;
+      p.distance = Math.max(0, p.distance - 1);
+      p.frozenUntil = Date.now() + FREEZE_MS;
+      spin(p);
+      statusEl.textContent = who + " hit a banana skin. Ouch.";
+    }
+    updatePlayerUI(p);
+    if (p.distance >= FINISH) finishRace(p);
+  }
+
+  function finishRace(winner) {
+    state.over = true; state.racing = false;
+    stopTimers();
+    human.input.disabled = true;
+    state.playerWon = winner === human;
+    if (state.playerWon) {
+      recordWin();
+      if (state.level < sentenceBank.length) {
+        statusEl.textContent = state.userName + " wins Level " + state.level + "!";
+        startBtn.textContent = "Next Level";
+      } else {
+        statusEl.textContent = state.userName + " beat all " + sentenceBank.length + " levels. Champion!";
+        startBtn.textContent = "Play Again";
+      }
+    } else {
+      statusEl.textContent = "Rival wins Level " + state.level + ". Try again.";
+      startBtn.textContent = "Retry Level";
+    }
+    startBtn.disabled = false;
+    refreshAll();
+    startBtn.focus();
+  }
+
+  // ---------- CPU driver ----------
+  // Words per minute rises with level: ~22 wpm at L1 to ~58 wpm at L10.
+  function cpuCharMs() {
+    const wpm = 22 + (state.level - 1) * 4;
+    return 60000 / (wpm * 5);
+  }
+  function scheduleCpu() {
+    if (!state.racing || state.over) return;
+    const wait = Math.max(0, cpu.frozenUntil - Date.now());
+    const word = cpu.words[cpu.wordIndex];
+    const willTypo = Math.random() < 0.06;
+    const typedWord = willTypo ? mangle(word) : word;
+    let i = 0;
+    cpu.input.value = "";
+    const step = () => {
+      if (!state.racing || state.over) return;
+      if (i < typedWord.length) {
+        i += 1;
+        cpu.input.value = typedWord.slice(0, i);
+        cpuTimer = setTimeout(step, cpuCharMs() * (0.7 + Math.random() * 0.6));
+      } else {
+        submitWord(cpu, typedWord);
+        cpu.input.value = "";
+        cpuTimer = setTimeout(scheduleCpu, cpuCharMs() * 1.2);
+      }
+    };
+    cpuTimer = setTimeout(step, wait + cpuCharMs());
+  }
+  function mangle(word) {
+    if (word.length < 2) return word + "x";
+    const i = Math.floor(Math.random() * (word.length - 1));
+    return word.slice(0, i) + word[i + 1] + word[i] + word.slice(i + 2);
+  }
+
+  // ---------- name ----------
+  function saveName() {
+    const cleaned = (nameInput.value || "").trim().slice(0, 20);
+    state.userName = cleaned || "Guest";
+    human.name = state.userName;
+    userInfoEl.textContent = "Driver: " + state.userName;
+    $("playerName1").textContent = state.userName;
+    const entry = getOrCreateEntry(state.userName);
+    entry.lastPlayed = new Date().toISOString();
+    saveLeaderboard(); renderLeaderboard();
+    nameInput.value = "";
+    nameModal.classList.remove("active");
+    setLevel(1);
+    startBtn.focus();
+  }
+
+  // ---------- wiring ----------
+  human.input.addEventListener("keydown", e => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      const typed = human.input.value.trim();
+      if (Date.now() < human.frozenUntil) return;
+      human.input.value = "";
+      submitWord(human, typed);
+    }
+  });
+  // Mobile keyboards often don't send a usable key for space; catch it on input.
+  human.input.addEventListener("input", () => {
+    const v = human.input.value;
+    if (/\s$/.test(v)) {
+      human.input.value = "";
+      if (Date.now() < human.frozenUntil) return;
+      submitWord(human, v.trim());
+    }
+  });
+
+  saveNameBtn.addEventListener("click", saveName);
+  nameInput.addEventListener("keydown", e => { if (e.key === "Enter") saveName(); });
+  startBtn.addEventListener("click", startRace);
+  resetBtn.addEventListener("click", () => setLevel(state.level));
+  lbBtn.addEventListener("click", () => {
+    lbPanel.hidden = !lbPanel.hidden;
+    lbBtn.setAttribute("aria-expanded", String(!lbPanel.hidden));
+  });
+
+  state.leaderboard = loadLeaderboard();
+  renderLeaderboard();
+  setLevel(1);
+  nameInput.focus();
+</script>
+</body>
+</html>
