@@ -20,6 +20,7 @@
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
 
   html, body { margin: 0; min-height: 100%; }
 
@@ -272,21 +273,57 @@
     .kart { transition: none; }
     .kart.spin { animation: none; }
   }
+
+  /* ---- multiplayer additions ---- */
+  .mode-grid { display: grid; gap: 10px; margin-top: 6px; }
+  .mode-grid button { width: 100%; }
+  .join-row { display: flex; gap: 8px; }
+  .join-row input { margin-bottom: 0; text-transform: uppercase; letter-spacing: 0.3em; text-align: center; min-width: 0; }
+  .join-row button { flex: 0 0 auto; padding-inline: 16px; }
+  .modal-error { min-height: 1.4em; margin: 10px 0 0; color: var(--red); font-weight: 800; font-size: 0.9rem; text-align: left; }
+  .divider { margin: 14px 0 6px; text-align: left; color: #fbe9b9; font-size: 0.75rem; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.75; }
+
+  .room-bar {
+    margin: 0 auto 12px; max-width: 780px;
+    display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; border-radius: 14px;
+    background: rgba(95,224,210,0.08);
+    border: 2px dashed rgba(95,224,210,0.7);
+    color: #bff7ef; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.85rem;
+  }
+  .room-code { font: 900 1.4rem/1 "Consolas", "Courier New", monospace; letter-spacing: 0.3em; color: var(--ink); background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 8px; user-select: all; }
+  .room-bar button { padding: 8px 12px; font-size: 0.75rem; box-shadow: none; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); display: inline-block; }
+  .dot.on { background: var(--teal); box-shadow: 0 0 8px var(--teal); }
+
+  .countdown {
+    position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 900;
+    font: 900 clamp(5rem, 22vw, 14rem)/1 "Trebuchet MS", system-ui, sans-serif;
+    color: var(--gold); text-shadow: 6px 6px 0 #492e00;
+  }
 </style>
 </head>
 <body>
-
 <div id="nameModal" class="modal active">
   <div class="modal-box">
     <h2>Type Kart</h2>
-    <p class="modal-hint">Type each word and press Space. First to 20m wins. A typo costs you 1m and a short spin-out. The CPU rival gets faster every level.</p>
+    <p class="modal-hint">Type each word and press Space. First to 20m wins. A typo costs 1m and a short spin-out.</p>
     <label for="playerNameInput">Driver name</label>
     <input id="playerNameInput" type="text" maxlength="20" autocomplete="off" placeholder="Enter your name" />
-    <div class="modal-buttons">
-      <button id="saveNameBtn" class="primary">Start</button>
+    <div class="mode-grid">
+      <button id="soloBtn" class="primary">Solo vs CPU</button>
+      <button id="hostBtn" class="secondary">Host online race</button>
     </div>
+    <div class="divider">Join a friend's race</div>
+    <div class="join-row">
+      <input id="joinCodeInput" type="text" maxlength="5" autocomplete="off" placeholder="CODE" aria-label="Room code" />
+      <button id="joinBtn" class="secondary">Join</button>
+    </div>
+    <p id="modalError" class="modal-error" role="alert"></p>
   </div>
 </div>
+
+<div id="countdown" class="countdown" hidden></div>
 
 <div class="app">
   <div class="topbar">
@@ -298,6 +335,13 @@
     <div id="levelDisplay" class="level-display">Level 1 / 10</div>
     <div id="userInfo" class="user-info">Driver: Guest</div>
     <button id="toggleLeaderboard" class="leaderboard-btn" aria-expanded="false">Leaderboard</button>
+  </div>
+
+  <div id="roomBar" class="room-bar" hidden>
+    <span class="dot" id="connDot"></span>
+    <span id="roomLabel">Room</span>
+    <span id="roomCode" class="room-code">-----</span>
+    <button id="copyCodeBtn" class="secondary">Copy</button>
   </div>
 
   <div id="leaderboardPanel" class="leaderboard-panel" hidden>
@@ -313,7 +357,7 @@
         <div class="player-name" id="playerName1">Player 1</div>
         <div id="p1Score" class="score">0 / 20m</div>
       </div>
-      <div id="track1" class="track"><span class="flag start"></span><span class="flag finish"></span><span class="kart">P1</span></div>
+      <div id="track1" class="track"><span class="flag start"></span><span class="flag finish"></span><span class="kart">YOU</span></div>
       <div class="stats">
         <span>Clean: <strong id="p1Clean">0</strong></span>
         <span>Typos: <strong id="p1Typos">0</strong></span>
@@ -328,23 +372,25 @@
         <div class="player-name" id="playerName2">Rival (CPU)</div>
         <div id="p2Score" class="score">0 / 20m</div>
       </div>
-      <div id="track2" class="track"><span class="flag start"></span><span class="flag finish"></span><span class="kart rival">CPU</span></div>
+      <div id="track2" class="track"><span class="flag start"></span><span class="flag finish"></span><span class="kart rival" id="kart2">CPU</span></div>
       <div class="stats">
         <span>Clean: <strong id="p2Clean">0</strong></span>
         <span>Typos: <strong id="p2Typos">0</strong></span>
         <span>State: <strong id="p2State">Ready</strong></span>
       </div>
       <div id="p2Target" class="target">Next word: —</div>
-      <textarea id="p2Input" class="word-box cpu" placeholder="CPU types here" readonly tabindex="-1"></textarea>
+      <textarea id="p2Input" class="word-box cpu" placeholder="Rival types here" readonly tabindex="-1"></textarea>
     </div>
   </div>
 
   <div class="controls">
     <button id="startRace" class="primary">Start Race</button>
     <button id="resetRace" class="secondary">Reset</button>
+    <button id="changeMode" class="secondary">Change mode</button>
   </div>
 </div>
 
+<script src="vendor/peerjs.min.js"></script>
 <script>
   const sentenceBank = [
     ["The cat sleeps by the warm window.","I drink tea and eat toast at dawn.","The room is quiet and bright today.","We walk to the shop for milk.","My keys are on the table again.","The dog waits by the door.","I type with two hands and focus.","A good beer tastes cold and easy.","The train leaves on time today.","We laugh and start the workday."],
@@ -362,26 +408,38 @@
   const FINISH = 20;
   const FREEZE_MS = 700;
   const STORE_KEY = "typekart_leaderboard";
+  const PEER_PREFIX = "typekart-v1-";
+  const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
-  const state = { userName: "Guest", level: 1, racing: false, over: false, playerWon: false, leaderboard: [] };
+  const state = {
+    mode: "solo",          // "solo" | "host" | "guest"
+    phase: "idle",         // "idle" | "countdown" | "racing" | "over"
+    userName: "Guest",
+    level: 1,
+    playerWon: false,
+    leaderboard: []
+  };
 
   const $ = id => document.getElementById(id);
   const statusEl = $("status"), levelEl = $("levelDisplay"), userInfoEl = $("userInfo");
-  const startBtn = $("startRace"), resetBtn = $("resetRace");
+  const startBtn = $("startRace"), resetBtn = $("resetRace"), changeModeBtn = $("changeMode");
   const lbPanel = $("leaderboardPanel"), lbList = $("leaderboardList"), lbBtn = $("toggleLeaderboard");
-  const nameModal = $("nameModal"), nameInput = $("playerNameInput"), saveNameBtn = $("saveNameBtn");
+  const modal = $("nameModal"), nameInput = $("playerNameInput"), modalError = $("modalError");
+  const joinCodeInput = $("joinCodeInput");
+  const roomBar = $("roomBar"), roomCodeEl = $("roomCode"), roomLabel = $("roomLabel"), connDot = $("connDot"), copyCodeBtn = $("copyCodeBtn");
+  const countdownEl = $("countdown");
 
-  function mkPlayer(n, isCpu) {
+  function mkPlayer(n) {
     return {
-      isCpu, name: isCpu ? "Rival" : "Player 1",
       input: $("p" + n + "Input"), track: $("track" + n), kart: $("track" + n).querySelector(".kart"),
       targetEl: $("p" + n + "Target"), cleanEl: $("p" + n + "Clean"), typoEl: $("p" + n + "Typos"),
-      scoreEl: $("p" + n + "Score"), stateEl: $("p" + n + "State"),
-      words: [], wordIndex: 0, distance: 0, clean: 0, typos: 0, frozenUntil: 0, used: []
+      scoreEl: $("p" + n + "Score"), stateEl: $("p" + n + "State"), nameEl: $("playerName" + n),
+      name: "", words: [], wordIndex: 0, distance: 0, clean: 0, typos: 0, frozenUntil: 0, used: [],
+      remoteWord: "—", atFinish: false
     };
   }
-  const human = mkPlayer(1, false), cpu = mkPlayer(2, true);
-  const players = [human, cpu];
+  const me = mkPlayer(1), rival = mkPlayer(2);
+  const players = [me, rival];
 
   // ---------- storage (optional; game works without it) ----------
   function loadLeaderboard() {
@@ -431,6 +489,9 @@
   }
 
   // ---------- UI ----------
+  const online = () => state.mode !== "solo";
+  const connected = () => !!(conn && conn.open && rival.name);
+
   function updatePlayerUI(p) {
     const pct = Math.min(p.distance, FINISH) / FINISH;
     p.kart.style.left = "calc(8px + (100% - 80px) * " + pct.toFixed(3) + ")";
@@ -440,19 +501,59 @@
 
     const frozen = Date.now() < p.frozenUntil;
     let st = "Ready";
-    if (state.over) st = p.distance >= FINISH ? "Winner" : "Lost";
+    if (p === rival && online() && !connected()) st = "Waiting";
+    else if (state.phase === "over") st = p.distance >= FINISH ? "Winner" : "Lost";
+    else if (p.atFinish) st = "At finish";
     else if (frozen) st = "Banana!";
-    else if (state.racing) st = "Driving";
+    else if (state.phase === "racing") st = "Driving";
+    else if (state.phase === "countdown") st = "On grid";
     p.stateEl.textContent = st;
-    p.stateEl.classList.toggle("banana", frozen && !state.over);
+    p.stateEl.classList.toggle("banana", frozen && state.phase === "racing");
 
+    let word = "—";
+    if (state.phase !== "over") {
+      if (p === rival && online()) word = rival.remoteWord || "—";
+      else word = p.words[p.wordIndex] || "—";
+    }
     p.targetEl.replaceChildren("Next word: ");
     const w = document.createElement("span");
     w.className = "word";
-    w.textContent = state.over ? "—" : (p.words[p.wordIndex] || "—");
+    w.textContent = word;
     p.targetEl.appendChild(w);
   }
   function refreshAll() { players.forEach(updatePlayerUI); }
+
+  function setRivalIdentity() {
+    if (state.mode === "solo") {
+      rival.name = "Rival";
+      rival.nameEl.textContent = "Rival (CPU)";
+      rival.kart.textContent = "CPU";
+    } else {
+      rival.nameEl.textContent = rival.name || "Waiting for driver…";
+      rival.kart.textContent = rival.name ? rival.name.slice(0, 3).toUpperCase() : "?";
+    }
+  }
+
+  function updateControls() {
+    const isGuest = state.mode === "guest";
+    resetBtn.disabled = isGuest || state.phase === "countdown";
+    if (isGuest) {
+      startBtn.disabled = true;
+      startBtn.textContent = state.phase === "racing" ? "Race Live" : "Host starts";
+      return;
+    }
+    if (state.phase === "racing" || state.phase === "countdown") {
+      startBtn.disabled = true; startBtn.textContent = "Race Live"; return;
+    }
+    if (state.phase === "over") {
+      startBtn.disabled = state.mode === "host" && !connected();
+      if (state.mode === "solo" && !state.playerWon) startBtn.textContent = "Retry Level";
+      else startBtn.textContent = state.level < sentenceBank.length ? "Next Level" : "Play Again";
+      return;
+    }
+    startBtn.textContent = "Start Race";
+    startBtn.disabled = state.mode === "host" && !connected();
+  }
 
   function spin(p) {
     p.kart.classList.remove("spin");
@@ -461,121 +562,175 @@
   }
 
   // ---------- race flow ----------
-  let cpuTimer = null;
-  let tickTimer = null;
-
-  function resetPlayer(p) {
-    p.used = [];
-    nextSentence(p);
-    p.distance = 0; p.clean = 0; p.typos = 0; p.frozenUntil = 0;
-    p.input.value = "";
-    p.kart.classList.remove("spin");
-  }
+  let cpuTimer = null, tickTimer = null, countdownTimer = null;
 
   function stopTimers() {
     clearTimeout(cpuTimer); cpuTimer = null;
     clearInterval(tickTimer); tickTimer = null;
+    clearTimeout(countdownTimer); countdownTimer = null;
+    countdownEl.hidden = true;
   }
 
-  function setLevel(level) {
+  function resetPlayer(p) {
+    p.used = [];
+    nextSentence(p);
+    p.distance = 0; p.clean = 0; p.typos = 0; p.frozenUntil = 0; p.atFinish = false;
+    p.remoteWord = "—";
+    p.input.value = "";
+    p.kart.classList.remove("spin");
+  }
+
+  function setLevel(level, opts = {}) {
     stopTimers();
     state.level = Math.max(1, Math.min(level, sentenceBank.length));
-    state.racing = false; state.over = false; state.playerWon = false;
+    state.phase = "idle"; state.playerWon = false;
     levelEl.textContent = "Level " + state.level + " / " + sentenceBank.length;
     players.forEach(resetPlayer);
-    human.input.disabled = true;
-    statusEl.textContent = "Level " + state.level + " ready. Press Start Race.";
-    startBtn.disabled = false;
-    startBtn.textContent = "Start Race";
+    me.input.disabled = true;
+    if (state.mode === "host") send({ t: "level", level: state.level });
+    if (!opts.quiet) {
+      if (state.mode === "guest") statusEl.textContent = "Level " + state.level + ". Waiting for " + rival.name + " to start.";
+      else if (state.mode === "host" && !connected()) statusEl.textContent = "Level " + state.level + ". Share the room code and wait for a driver.";
+      else statusEl.textContent = "Level " + state.level + " ready. Press Start Race.";
+    }
+    if (online()) pushProgress(false);
+    updateControls();
     refreshAll();
   }
 
-  function startRace() {
-    if (state.over) {
-      setLevel(state.playerWon ? (state.level < sentenceBank.length ? state.level + 1 : 1) : state.level);
+  function onStartClick() {
+    if (state.mode === "guest") return;
+    if (state.phase === "over") {
+      let next;
+      if (state.mode === "solo" && !state.playerWon) next = state.level;
+      else next = state.level < sentenceBank.length ? state.level + 1 : 1;
+      setLevel(next);
       return;
     }
-    if (state.racing) return;
-    state.racing = true;
-    human.input.disabled = false;
-    human.input.value = "";
-    human.input.focus();
-    startBtn.disabled = true;
-    startBtn.textContent = "Race Live";
-    statusEl.textContent = "Race on! Every correct word is gas. Every typo is a banana skin.";
-    tickTimer = setInterval(refreshAll, 150);
-    scheduleCpu();
-    refreshAll();
+    if (state.phase !== "idle") return;
+    if (state.mode === "host") {
+      if (!connected()) return;
+      send({ t: "start" });
+    }
+    beginCountdown();
   }
 
+  function beginCountdown() {
+    stopTimers();
+    players.forEach(resetPlayer);
+    state.phase = "countdown";
+    statusEl.textContent = "Get ready…";
+    updateControls(); refreshAll();
+    const seq = ["3", "2", "1", "GO!"];
+    let i = 0;
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const step = () => {
+      if (i < seq.length) {
+        countdownEl.textContent = seq[i];
+        countdownEl.hidden = false;
+        if (!reduce) countdownEl.animate([{ transform: "scale(1.4)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }], { duration: 250 });
+        if (seq[i] === "GO!") go();
+        i += 1;
+        countdownTimer = setTimeout(step, i === seq.length ? 500 : 800);
+      } else {
+        countdownEl.hidden = true;
+      }
+    };
+    step();
+  }
+
+  function go() {
+    state.phase = "racing";
+    me.input.disabled = false;
+    me.input.value = "";
+    me.input.focus();
+    statusEl.textContent = "Race on! Every correct word is gas. Every typo is a banana skin.";
+    tickTimer = setInterval(refreshAll, 150);
+    if (state.mode === "solo") scheduleCpu();
+    if (online()) pushProgress(false);
+    updateControls(); refreshAll();
+  }
+
+  // Applies a typed word to a locally simulated player (me, or the CPU in solo).
   function submitWord(p, typed) {
-    if (!state.racing || state.over) return;
+    if (state.phase !== "racing" || p.atFinish) return;
     if (Date.now() < p.frozenUntil) return;
     const target = p.words[p.wordIndex];
     if (!typed || !target) return;
 
-    const who = p.isCpu ? "Rival" : state.userName;
+    const who = p === me ? state.userName : rival.name;
+    let spun = false;
     if (typed.toLowerCase() === target) {
       p.clean += 1; p.distance += 1; p.wordIndex += 1;
       if (p.wordIndex >= p.words.length) nextSentence(p);
-      if (!p.isCpu) statusEl.textContent = who + " nailed it. Full throttle.";
+      if (p === me) statusEl.textContent = who + " nailed it. Full throttle.";
     } else {
       p.typos += 1;
       p.distance = Math.max(0, p.distance - 1);
       p.frozenUntil = Date.now() + FREEZE_MS;
-      spin(p);
+      spin(p); spun = true;
       statusEl.textContent = who + " hit a banana skin. Ouch.";
     }
     updatePlayerUI(p);
-    if (p.distance >= FINISH) finishRace(p);
+    if (p === me && online()) pushProgress(spun);
+
+    if (p.distance >= FINISH) {
+      if (state.mode === "guest") {
+        // Host decides the winner; wait for its verdict.
+        me.atFinish = true;
+        me.input.disabled = true;
+        statusEl.textContent = "Finish line! Checking the photo finish…";
+        pushProgress(false);
+        updatePlayerUI(me);
+      } else {
+        finishRace(p);
+      }
+    }
   }
 
   function finishRace(winner) {
-    state.over = true; state.racing = false;
+    if (state.phase === "over") return;
+    state.phase = "over";
     stopTimers();
-    human.input.disabled = true;
-    state.playerWon = winner === human;
+    me.input.disabled = true;
+    state.playerWon = winner === me;
+    if (state.mode === "host") send({ t: "over", winner: winner === me ? "host" : "guest" });
+
     if (state.playerWon) {
       recordWin();
-      if (state.level < sentenceBank.length) {
-        statusEl.textContent = state.userName + " wins Level " + state.level + "!";
-        startBtn.textContent = "Next Level";
-      } else {
-        statusEl.textContent = state.userName + " beat all " + sentenceBank.length + " levels. Champion!";
-        startBtn.textContent = "Play Again";
-      }
+      statusEl.textContent = state.level < sentenceBank.length
+        ? state.userName + " wins Level " + state.level + "!"
+        : state.userName + " beat all " + sentenceBank.length + " levels. Champion!";
     } else {
-      statusEl.textContent = "Rival wins Level " + state.level + ". Try again.";
-      startBtn.textContent = "Retry Level";
+      statusEl.textContent = rival.name + " wins Level " + state.level + "." + (state.mode === "solo" ? " Try again." : "");
     }
-    startBtn.disabled = false;
-    refreshAll();
-    startBtn.focus();
+    if (state.mode === "guest") statusEl.textContent += " Waiting for host.";
+    updateControls(); refreshAll();
+    if (!startBtn.disabled) startBtn.focus();
   }
 
-  // ---------- CPU driver ----------
+  // ---------- CPU driver (solo) ----------
   // Words per minute rises with level: ~22 wpm at L1 to ~58 wpm at L10.
   function cpuCharMs() {
     const wpm = 22 + (state.level - 1) * 4;
     return 60000 / (wpm * 5);
   }
   function scheduleCpu() {
-    if (!state.racing || state.over) return;
-    const wait = Math.max(0, cpu.frozenUntil - Date.now());
-    const word = cpu.words[cpu.wordIndex];
-    const willTypo = Math.random() < 0.06;
-    const typedWord = willTypo ? mangle(word) : word;
+    if (state.phase !== "racing" || state.mode !== "solo") return;
+    const wait = Math.max(0, rival.frozenUntil - Date.now());
+    const word = rival.words[rival.wordIndex];
+    const typedWord = Math.random() < 0.06 ? mangle(word) : word;
     let i = 0;
-    cpu.input.value = "";
+    rival.input.value = "";
     const step = () => {
-      if (!state.racing || state.over) return;
+      if (state.phase !== "racing") return;
       if (i < typedWord.length) {
         i += 1;
-        cpu.input.value = typedWord.slice(0, i);
+        rival.input.value = typedWord.slice(0, i);
         cpuTimer = setTimeout(step, cpuCharMs() * (0.7 + Math.random() * 0.6));
       } else {
-        submitWord(cpu, typedWord);
-        cpu.input.value = "";
+        submitWord(rival, typedWord);
+        rival.input.value = "";
         cpuTimer = setTimeout(scheduleCpu, cpuCharMs() * 1.2);
       }
     };
@@ -587,54 +742,293 @@
     return word.slice(0, i) + word[i + 1] + word[i] + word.slice(i + 2);
   }
 
-  // ---------- name ----------
-  function saveName() {
+  // ---------- networking (PeerJS, peer-to-peer) ----------
+  let peer = null, conn = null, roomCode = "", joinTimeout = null;
+
+  function send(msg) {
+    if (conn && conn.open) { try { conn.send(msg); } catch (e) {} }
+  }
+  function pushProgress(spun) {
+    send({
+      t: "prog", d: me.distance, clean: me.clean, typos: me.typos,
+      frozenMs: Math.max(0, me.frozenUntil - Date.now()),
+      word: state.phase === "racing" ? (me.words[me.wordIndex] || "") : "",
+      atFinish: me.atFinish, spin: !!spun
+    });
+  }
+  function genCode() {
+    let c = "";
+    for (let i = 0; i < 5; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+    return c;
+  }
+  function shareLink() {
+    return location.origin + location.pathname + "#" + roomCode;
+  }
+  function setConnUI() {
+    roomBar.hidden = !online();
+    roomCodeEl.textContent = roomCode || "-----";
+    connDot.classList.toggle("on", connected());
+    roomLabel.textContent = state.mode === "host"
+      ? (connected() ? "Racing " + rival.name + " · Room" : "Waiting for driver · Room")
+      : (connected() ? "Connected to " + rival.name + " · Room" : "Connecting · Room");
+    copyCodeBtn.hidden = state.mode !== "host";
+  }
+
+  function teardownNet() {
+    clearTimeout(joinTimeout);
+    if (conn) { try { conn.close(); } catch (e) {} }
+    if (peer) { try { peer.destroy(); } catch (e) {} }
+    conn = null; peer = null; roomCode = "";
+  }
+
+  function netAvailable() {
+    if (typeof Peer === "undefined") {
+      modalError.textContent = "Online play could not load. Check your connection and reload.";
+      return false;
+    }
+    return true;
+  }
+
+  function hostRoom() {
+    if (!netAvailable()) return;
+    teardownNet();
+    state.mode = "host";
+    roomCode = genCode();
+    rival.name = "";
+    peer = new Peer(PEER_PREFIX + roomCode);
+    peer.on("open", () => {
+      closeModal();
+      setRivalIdentity(); setConnUI();
+      setLevel(1);
+    });
+    peer.on("connection", c => {
+      if (conn && conn.open) {
+        c.on("open", () => { c.send({ t: "full" }); setTimeout(() => c.close(), 300); });
+        return;
+      }
+      attachConn(c);
+    });
+    peer.on("disconnected", () => { try { peer.reconnect(); } catch (e) {} });
+    peer.on("error", err => {
+      if (err.type === "unavailable-id") { hostRoom(); return; }
+      netError(err);
+    });
+  }
+
+  function joinRoom(code) {
+    if (!netAvailable()) return;
+    code = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length !== 5) { modalError.textContent = "Enter the 5-character room code."; return; }
+    teardownNet();
+    state.mode = "guest";
+    roomCode = code;
+    rival.name = "";
+    modalError.textContent = "Connecting to room " + code + "…";
+    peer = new Peer();
+    peer.on("open", () => {
+      attachConn(peer.connect(PEER_PREFIX + code, { reliable: true }));
+      joinTimeout = setTimeout(() => {
+        if (!connected()) { teardownNet(); modalError.textContent = "Could not reach room " + code + ". Check the code and try again."; }
+      }, 12000);
+    });
+    peer.on("error", err => {
+      if (err.type === "peer-unavailable") {
+        teardownNet();
+        openModal("No race found with code " + code + ".");
+        return;
+      }
+      netError(err);
+    });
+  }
+
+  function attachConn(c) {
+    conn = c;
+    c.on("open", () => {
+      if (state.mode === "guest") send({ t: "hello", name: state.userName });
+    });
+    c.on("data", onMessage);
+    c.on("close", () => { if (conn === c) onRivalLeft(); });
+    c.on("error", () => { if (conn === c) onRivalLeft(); });
+  }
+
+  function onRivalLeft() {
+    const name = rival.name || "Your rival";
+    conn = null;
+    rival.name = "";
+    stopTimers();
+    if (state.mode === "host") {
+      setRivalIdentity(); setConnUI();
+      setLevel(state.level, { quiet: true });
+      statusEl.textContent = name + " left. Share the code to race someone else.";
+    } else if (state.mode === "guest") {
+      teardownNet();
+      state.mode = "solo";
+      setRivalIdentity(); setConnUI();
+      setLevel(state.level, { quiet: true });
+      openModal(name + " ended the race.");
+    }
+  }
+
+  function netError(err) {
+    const msg = (err && err.type === "network") ? "Lost connection to the matchmaking server."
+              : (err && err.type === "browser-incompatible") ? "This browser does not support online play."
+              : "Online play hit an error. Try again.";
+    if (state.mode === "guest" && !connected()) { teardownNet(); state.mode = "solo"; openModal(msg); }
+    else statusEl.textContent = msg;
+  }
+
+  function cleanName(v) { return String(v || "").trim().slice(0, 20) || "Driver"; }
+
+  function onMessage(m) {
+    if (!m || typeof m !== "object") return;
+    switch (m.t) {
+      case "hello":
+        if (state.mode !== "host") return;
+        rival.name = cleanName(m.name);
+        send({ t: "welcome", name: state.userName, level: state.level });
+        setRivalIdentity(); setConnUI();
+        setLevel(state.level, { quiet: true });
+        statusEl.textContent = rival.name + " joined. Press Start Race.";
+        break;
+      case "welcome":
+        if (state.mode !== "guest") return;
+        clearTimeout(joinTimeout);
+        rival.name = cleanName(m.name);
+        closeModal();
+        setRivalIdentity(); setConnUI();
+        setLevel(Number(m.level) || 1, { quiet: true });
+        statusEl.textContent = "Connected to " + rival.name + ". Waiting for them to start.";
+        break;
+      case "full":
+        teardownNet(); state.mode = "solo";
+        openModal("That race already has two drivers.");
+        break;
+      case "level":
+        if (state.mode === "guest") setLevel(Number(m.level) || 1);
+        break;
+      case "start":
+        if (state.mode === "guest") beginCountdown();
+        break;
+      case "prog":
+        rival.distance = Math.max(0, Math.min(FINISH, Number(m.d) || 0));
+        rival.clean = Number(m.clean) || 0;
+        rival.typos = Number(m.typos) || 0;
+        rival.frozenUntil = Date.now() + Math.min(FREEZE_MS, Number(m.frozenMs) || 0);
+        rival.remoteWord = String(m.word || "—").slice(0, 40);
+        rival.atFinish = !!m.atFinish;
+        if (m.spin) spin(rival);
+        updatePlayerUI(rival);
+        if (state.mode === "host" && state.phase === "racing" && rival.distance >= FINISH) finishRace(rival);
+        break;
+      case "typing":
+        rival.input.value = String(m.v || "").slice(0, 40);
+        break;
+      case "over":
+        if (state.mode === "guest") finishRace(m.winner === "guest" ? me : rival);
+        break;
+    }
+  }
+
+  // ---------- modal / modes ----------
+  function readName() {
     const cleaned = (nameInput.value || "").trim().slice(0, 20);
-    state.userName = cleaned || "Guest";
-    human.name = state.userName;
+    if (cleaned) state.userName = cleaned;
+    me.name = state.userName;
     userInfoEl.textContent = "Driver: " + state.userName;
-    $("playerName1").textContent = state.userName;
+    me.nameEl.textContent = state.userName;
     const entry = getOrCreateEntry(state.userName);
     entry.lastPlayed = new Date().toISOString();
     saveLeaderboard(); renderLeaderboard();
-    nameInput.value = "";
-    nameModal.classList.remove("active");
+  }
+  function openModal(error) {
+    modalError.textContent = error || "";
+    if (state.userName !== "Guest") nameInput.value = state.userName;
+    modal.classList.add("active");
+    nameInput.focus();
+  }
+  function closeModal() {
+    modal.classList.remove("active");
+    modalError.textContent = "";
+  }
+  function startSolo() {
+    readName();
+    teardownNet();
+    state.mode = "solo";
+    closeModal();
+    setRivalIdentity(); setConnUI();
     setLevel(1);
     startBtn.focus();
   }
 
   // ---------- wiring ----------
-  human.input.addEventListener("keydown", e => {
+  let lastTypingSent = 0;
+  me.input.addEventListener("keydown", e => {
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
-      const typed = human.input.value.trim();
-      if (Date.now() < human.frozenUntil) return;
-      human.input.value = "";
-      submitWord(human, typed);
+      if (Date.now() < me.frozenUntil) return;
+      const typed = me.input.value.trim();
+      me.input.value = "";
+      send({ t: "typing", v: "" });
+      submitWord(me, typed);
     }
   });
   // Mobile keyboards often don't send a usable key for space; catch it on input.
-  human.input.addEventListener("input", () => {
-    const v = human.input.value;
+  me.input.addEventListener("input", () => {
+    const v = me.input.value;
     if (/\s$/.test(v)) {
-      human.input.value = "";
-      if (Date.now() < human.frozenUntil) return;
-      submitWord(human, v.trim());
+      me.input.value = "";
+      send({ t: "typing", v: "" });
+      if (Date.now() < me.frozenUntil) return;
+      submitWord(me, v.trim());
+      return;
     }
+    const now = Date.now();
+    if (now - lastTypingSent > 60) { lastTypingSent = now; send({ t: "typing", v }); }
   });
 
-  saveNameBtn.addEventListener("click", saveName);
-  nameInput.addEventListener("keydown", e => { if (e.key === "Enter") saveName(); });
-  startBtn.addEventListener("click", startRace);
-  resetBtn.addEventListener("click", () => setLevel(state.level));
+  $("soloBtn").addEventListener("click", startSolo);
+  $("hostBtn").addEventListener("click", () => { readName(); modalError.textContent = "Opening a room…"; hostRoom(); });
+  $("joinBtn").addEventListener("click", () => { readName(); joinRoom(joinCodeInput.value); });
+  joinCodeInput.addEventListener("input", () => { joinCodeInput.value = joinCodeInput.value.toUpperCase(); });
+  joinCodeInput.addEventListener("keydown", e => { if (e.key === "Enter") { readName(); joinRoom(joinCodeInput.value); } });
+  nameInput.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    if (joinCodeInput.value.trim()) { readName(); joinRoom(joinCodeInput.value); }
+    else startSolo();
+  });
+
+  startBtn.addEventListener("click", onStartClick);
+  resetBtn.addEventListener("click", () => { if (state.mode !== "guest") setLevel(state.level); });
+  changeModeBtn.addEventListener("click", () => {
+    teardownNet();
+    state.mode = "solo";
+    setRivalIdentity(); setConnUI();
+    setLevel(state.level, { quiet: true });
+    openModal();
+  });
+  copyCodeBtn.addEventListener("click", () => {
+    const text = shareLink();
+    const done = () => { copyCodeBtn.textContent = "Copied"; setTimeout(() => (copyCodeBtn.textContent = "Copy link"), 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => { prompt("Share this link:", text); });
+    else prompt("Share this link:", text);
+  });
+  copyCodeBtn.textContent = "Copy link";
   lbBtn.addEventListener("click", () => {
     lbPanel.hidden = !lbPanel.hidden;
     lbBtn.setAttribute("aria-expanded", String(!lbPanel.hidden));
   });
+  window.addEventListener("beforeunload", teardownNet);
 
+  // ---------- boot ----------
   state.leaderboard = loadLeaderboard();
   renderLeaderboard();
-  setLevel(1);
+  setRivalIdentity(); setConnUI();
+  setLevel(1, { quiet: true });
+  const hashCode = (location.hash || "").replace("#", "").toUpperCase();
+  if (/^[A-Z0-9]{5}$/.test(hashCode)) {
+    joinCodeInput.value = hashCode;
+    modalError.textContent = "Enter your name, then press Join.";
+  }
   nameInput.focus();
 </script>
 </body>
